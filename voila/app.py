@@ -501,7 +501,7 @@ class Voila(Application):
         }
         if self.notebook_path:
             handlers.append((
-                url_path_join(self.server_url, r'/(.*)'),
+                url_path_join(self.server_url, r'/app'),
                 VoilaHandler,
                 {
                     'notebook_path': os.path.relpath(self.notebook_path, self.root_dir),
@@ -525,6 +525,14 @@ class Voila(Application):
                  }),
             ])
 
+        handlers.append((
+            url_path_join(self.server_url, r'/(.*)'),
+            MultiStaticFileHandler,
+            {
+                'paths': self.static_paths,
+                'default_filename': 'index.html'
+            },
+        ))
         self.app.add_handlers('.*$', handlers)
         self.listen()
 
