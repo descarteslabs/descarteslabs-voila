@@ -47,6 +47,8 @@ class VoilaHandler(JupyterHandler):
 
         # Check Descartes Labs authentication
         self.jwt_token = self.get_cookie("JWT")
+        if self.jwt_token is None:
+            self.jwt_token = ""
         if self.app_url != "":
             try:
                 auth = dl.Auth(jwt_token=self.jwt_token)
