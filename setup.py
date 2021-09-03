@@ -87,6 +87,7 @@ setup_args = dict(
     packages=setuptools.find_packages(),
     entry_points={"console_scripts": ["voila = voila.app:main"]},
     install_requires=[
+        "descarteslabs==1.7.1",
         "jupyter_server>=0.3.0,<2.0.0",
         "jupyter_client>=6.1.3,<7",
         "nbclient>=0.4.0,<0.6",

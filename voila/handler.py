@@ -8,9 +8,11 @@
 #############################################################################
 
 import asyncio
+import descarteslabs as dl
 import os
 import sys
 import traceback
+import urllib
 
 import tornado.web
 
@@ -33,6 +35,9 @@ from .paths import collect_template_paths
 class VoilaHandler(JupyterHandler):
 
     def initialize(self, **kwargs):
+        self.app_url = kwargs.pop('app_url', "")
+        self.access_orgs = kwargs.pop('access_orgs', [])
+        self.access_groups = kwargs.pop('access_groups', [])
         self.notebook_path = kwargs.pop('notebook_path', [])    # should it be []
         self.template_paths = kwargs.pop('template_paths', [])
         self.traitlet_config = kwargs.pop('config', None)
@@ -40,8 +45,29 @@ class VoilaHandler(JupyterHandler):
         # we want to avoid starting multiple kernels due to template mistakes
         self.kernel_started = False
 
+        # Check Descartes Labs authentication
+        self.jwt_token = self.get_cookie("JWT")
+        if self.app_url != "":
+            try:
+                auth = dl.Auth(jwt_token=self.jwt_token)
+                auth._get_token()
+                org = auth.payload['org']
+                groups = auth.payload['groups']
+                if org in self.access_orgs or len(set(groups).intersection(set(self.access_groups))) > 0:
+                    self.authenticated = True
+                else:
+                    self.authenticated = False
+            except dl.exceptions.AuthError:
+                self.authenticated = False
+
     @tornado.web.authenticated
     async def get(self, path=None):
+        if self.app_url != "" and not self.authenticated:
+            redirect_url_params = urllib.parse.urlencode({"destination": self.app_url})
+            redirect_url = "https://iam.descarteslabs.com/auth/login?{}".format(redirect_url_params)
+            self.redirect(url=redirect_url)
+            return
+
         # if the handler got a notebook_path argument, always serve that
         notebook_path = self.notebook_path or path
         if self.notebook_path and path:  # when we are in single notebook mode but have a path
@@ -80,6 +106,7 @@ class VoilaHandler(JupyterHandler):
         host, port = split_host_and_port(self.request.host.lower())
         self.kernel_env['SERVER_PORT'] = str(port) if port else ''
         self.kernel_env['SERVER_NAME'] = host
+        self.kernel_env['JWT'] = self.jwt_token
 
         # we can override the template via notebook metadata or a query parameter
         template_override = None

@@ -129,6 +129,9 @@ class Voila(Application):
         'server_url': 'Voila.server_url',
         'enable_nbextensions': 'VoilaConfiguration.enable_nbextensions',
         'show_tracebacks': 'VoilaConfiguration.show_tracebacks',
+        'app_url': 'Voila.app_url',
+        'access_orgs': 'Voila.access_orgs',
+        'access_groups': 'Voila.access_groups',
     }
     classes = [
         VoilaConfiguration,
@@ -233,6 +236,15 @@ class Voila(Application):
                                  This option is intended to be used when the URL to display to the user
                                  cannot be determined reliably by the Jupyter notebook server (proxified
                                  or containerized setups for example)."""))
+
+    app_url = Unicode(u'', config=True,
+                           help=_(""))
+    
+    access_orgs = Unicode(u'[]', config=True,
+                          help=_(""))
+    
+    access_groups = Unicode(u'[]', config=True,
+                            help=_(""))
 
     @property
     def display_url(self):
@@ -501,13 +513,16 @@ class Voila(Application):
         }
         if self.notebook_path:
             handlers.append((
-                url_path_join(self.server_url, r'/app'),
+                url_path_join(self.server_url, r'/(.*)'),
                 VoilaHandler,
                 {
                     'notebook_path': os.path.relpath(self.notebook_path, self.root_dir),
                     'template_paths': self.template_paths,
                     'config': self.config,
-                    'voila_configuration': self.voila_configuration
+                    'voila_configuration': self.voila_configuration,
+                    'app_url': self.app_url,
+                    'access_groups': json.loads(self.access_groups),
+                    'access_orgs': json.loads(self.access_orgs)
                 }
             ))
         else:
@@ -525,14 +540,6 @@ class Voila(Application):
                  }),
             ])
 
-        handlers.append((
-            url_path_join(self.server_url, r'/(.*)'),
-            MultiStaticFileHandler,
-            {
-                'paths': self.static_paths,
-                'default_filename': 'index.html'
-            },
-        ))
         self.app.add_handlers('.*$', handlers)
         self.listen()
 
