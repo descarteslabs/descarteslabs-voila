@@ -52,7 +52,7 @@ class VoilaHandler(JupyterHandler):
         if self.app_url != "":
             try:
                 auth = dl.Auth(jwt_token=self.jwt_token)
-                auth._get_token()
+                token = auth.token
                 org = auth.payload['org']
                 groups = auth.payload['groups']
                 if org in self.access_orgs or len(set(groups).intersection(set(self.access_groups))) > 0:
