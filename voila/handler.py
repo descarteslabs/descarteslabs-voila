@@ -110,6 +110,15 @@ class VoilaHandler(JupyterHandler):
         self.kernel_env['SERVER_NAME'] = host
         self.kernel_env['JWT'] = self.jwt_token
 
+        # Add HTTP Headers as env vars following rfc3875#section-4.1.18
+        if len(self.voila_configuration.http_header_envs) > 0:
+            config_headers_lower = [header.lower() for header in self.voila_configuration.http_header_envs]
+            for header_name in self.request.headers:
+                # Use case insensitive comparison of header names as per rfc2616#section-4.2
+                if header_name.lower() in config_headers_lower:
+                    env_name = f'HTTP_{header_name.upper().replace("-", "_")}'
+                    self.kernel_env[env_name] = self.request.headers.get(header_name)
+
         # we can override the template via notebook metadata or a query parameter
         template_override = None
         if 'voila' in notebook.metadata and self.voila_configuration.allow_template_override in ['YES', 'NOTEBOOK']:
@@ -201,19 +210,6 @@ class VoilaHandler(JupyterHandler):
 
         self.executor = VoilaExecutor(nb, km=km, config=self.traitlet_config,
                                       show_tracebacks=self.voila_configuration.show_tracebacks)
-        
-        # Getting a reference to the original shutdown_kernel method
-        orig_shutdown_kernel = km.shutdown_kernel
-
-        # Defining a new shutdown_kernel method, that also stops client channels
-        async def shutdown_kernel(self, *args, executor=self.executor, **kwargs):
-            executor.kc.stop_channels()
-            await orig_shutdown_kernel(*args, **kwargs)
-
-        # Monkey patching the shutdown_kernel function
-        self.log.info("Monkey patching shutdown for kernel")
-        from jupyter_client import AsyncKernelManager
-        km.shutdown_kernel = shutdown_kernel.__get__(km, AsyncKernelManager)
 
         ###
         # start kernel client
@@ -232,6 +228,8 @@ class VoilaHandler(JupyterHandler):
         # e.g. if we do {% with nb = notebook_execute(nb, kernel_id) %}, the base template/blocks will not
         # see the updated variable (it seems to be local to our block)
         nb.cells = result.cells
+
+        await self._cleanup_resources()
 
     async def _jinja_cell_generator(self, nb, kernel_id):
         """Generator that will execute a single notebook cell at a time"""
@@ -282,6 +280,12 @@ class VoilaHandler(JupyterHandler):
                     ]
             finally:
                 yield output_cell
+
+        await self._cleanup_resources()
+
+    async def _cleanup_resources(self):
+        await ensure_async(self.executor.km.cleanup_resources())
+        await ensure_async(self.executor.kc.stop_channels())
 
     async def load_notebook(self, path):
         model = await ensure_async(self.contents_manager.get(path=path))

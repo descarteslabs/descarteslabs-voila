@@ -97,6 +97,7 @@ export class WidgetManager extends JupyterLabManager {
     const tags = document.body.querySelectorAll(
       'script[type="application/vnd.jupyter.widget-view+json"]'
     );
+
     tags.forEach(async viewtag => {
       if (!viewtag?.parentElement) {
         return;
@@ -217,18 +218,23 @@ export class WidgetManager extends JupyterLabManager {
     await Promise.all(
       widgets_info.map(async widget_info => {
         const state = (widget_info as any).msg.content.data.state;
-        const modelPromise = this.new_model(
-          {
-            model_name: state._model_name,
-            model_module: state._model_module,
-            model_module_version: state._model_module_version,
-            comm: (widget_info as any).comm
-          },
-          state
-        );
-        const model = await modelPromise;
-        models[model.model_id] = model;
-        return modelPromise;
+        try {
+          const modelPromise = this.new_model(
+            {
+              model_name: state._model_name,
+              model_module: state._model_module,
+              model_module_version: state._model_module_version,
+              comm: (widget_info as any).comm
+            },
+            state
+          );
+          const model = await modelPromise;
+          models[model.model_id] = model;
+        } catch (error) {
+          // Failed to create a widget model, we continue creating other models so that
+          // other widgets can render
+          console.error(error);
+        }
       })
     );
     return models;
